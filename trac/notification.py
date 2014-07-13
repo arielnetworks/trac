@@ -446,6 +446,7 @@ class NotifyEmail(Notify):
         t = deactivate()
         try:
             body = stream.render('text', encoding='utf-8')
+            body = body.replace('\r\n', '\n').replace('\n', '\r\n')
         finally:
             reactivate(t)
         public_cc = self.config.getbool('notification', 'use_public_cc')
