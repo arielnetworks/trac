@@ -110,6 +110,10 @@ class CommitTicketUpdater(Component):
         Must be empty or contain two characters. For example, if set to "[]",
         then commands must be in the form of [closes #4].""")
 
+    commands_verifying = Option('ticket', 'commit_ticket_update_commands.verifying',
+        'close closed closes fix fixed fixes',
+        """Commands that verifying tickets, as a space-separated list.""")
+
     commands_close = Option('ticket', 'commit_ticket_update_commands.close',
         'close closed closes fix fixed fixes',
         """Commands that close tickets, as a space-separated list.""")
@@ -270,6 +274,13 @@ In [changeset:"%s"]:
         ticket['resolution'] = 'fixed'
         if not ticket['owner']:
             ticket['owner'] = authname
+
+    def cmd_verifying(self, ticket, changeset, perm):
+        if not self.check_perms or 'TICKET_MODIFY' in perm:
+            ticket['status'] = 'verifying'
+            ticket['resolution'] = 'fixed'
+            if not ticket['owner']:
+                ticket['owner'] = changeset.author
 
     def cmd_refs(self, ticket, changeset, perm):
         if self.check_perms and not 'TICKET_APPEND' in perm:
