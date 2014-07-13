@@ -37,6 +37,7 @@ from trac.resource import Resource, ResourceNotFound
 from trac.search import ISearchSource, search_to_sql, shorten_result
 from trac.timeline.api import ITimelineEventProvider
 from trac.util import as_bool, content_disposition, embedded_numbers, pathjoin
+from trac.util.config import show_files_as_int
 from trac.util.datefmt import from_utimestamp, pretty_timedelta
 from trac.util.text import exception_to_unicode, to_unicode, \
                            unicode_urlencode, shorten_line, CRLF
@@ -862,12 +863,7 @@ class ChangesetModule(Component):
         if all_repos or repo_filters:
             show_files = self.timeline_show_files
             show_location = show_files == 'location'
-            if show_files in ('-1', 'unlimited'):
-                show_files = -1
-            elif show_files.isdigit():
-                show_files = int(show_files)
-            else:
-                show_files = 0 # disabled
+            show_files = show_files_as_int(show_files)
 
             if self.timeline_collapse:
                 collapse_changesets = lambda c: (c.author, c.message)
