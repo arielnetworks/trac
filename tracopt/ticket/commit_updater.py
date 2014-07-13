@@ -48,9 +48,10 @@ from trac.perm import PermissionCache
 from trac.resource import Resource
 from trac.ticket import Ticket
 from trac.ticket.notification import TicketNotifyEmail
+from trac.util.config import show_files_as_int
 from trac.util.datefmt import utc
 from trac.util.text import exception_to_unicode
-from trac.util.translation import cleandoc_
+from trac.util.translation import cleandoc_, gettext, ngettext
 from trac.versioncontrol import IRepositoryChangeListener, RepositoryManager
 from trac.versioncontrol.web_ui.changeset import ChangesetModule
 from trac.wiki.formatter import format_to_html
@@ -294,6 +295,11 @@ class CommitTicketReferenceMacro(WikiMacroBase):
      - `revision`: the revision of the desired changeset
     """)
 
+    show_files = Option('ticket', 'commit_ticket_reference_show_files', '0',
+        """Number of files to show (`-1` for unlimited, `0` to disable).
+
+        Show files in changeset when the macro is expanded in comment.""")
+
     def expand_macro(self, formatter, name, content, args={}):
         reponame = args.get('repository') or ''
         rev = args.get('revision')
@@ -303,6 +309,10 @@ class CommitTicketReferenceMacro(WikiMacroBase):
             message = changeset.message
             rev = changeset.rev
             resource = repos.resource
+            show_files = show_files_as_int(self.show_files)
+            if show_files:
+                message += self.get_files(formatter.context, changeset,
+                                          rev, resource, show_files)
         except Exception:
             message = content
             resource = Resource('repository', reponame)
@@ -318,3 +328,54 @@ class CommitTicketReferenceMacro(WikiMacroBase):
                 message, escape_newlines=True), class_='message')
         else:
             return tag.pre(message, class_='message')
+
+    def get_files(self, context, changeset, rev, repos_resource, show_files):
+        _source_link = u'[source:%s@%s %s]'
+        _changeset_link = u'[changeset:%s#file%d %%s]'
+        _changeset_stat_map = {
+            'add': gettext('added'),
+            'edit': gettext('modified'),
+            'copy': gettext('copied'),
+            'delete': gettext('deleted'),
+            'move': gettext('moved'),
+        }
+
+        def get_source_link(path, kind, change, base_path, base_rev,
+                            changeset_link=None):
+            stat_msg = _changeset_stat_map.get(change)
+            if change == 'edit':
+                link = _source_link % (path, rev, path)
+                return u'- %s (%s)' % (link, changeset_link % stat_msg)
+            elif change == 'add':
+                link = _source_link % (path, rev, path)
+                return u'- %s (%s)' % (link, stat_msg)
+            elif change == 'delete':
+                link = _source_link % (path, base_rev, path)
+                return u'- %s (%s)' % (link, stat_msg)
+            elif change == 'copy' or change == 'move':
+                link = _source_link % (path, rev, path)
+                orig = _source_link % (base_path, base_rev, base_path)
+                return u'- %s (%s %s)' % (link, stat_msg, orig)
+            else:
+                return u'- %s (%s)' % (path, change)
+
+        files = []
+        view_files = 1
+        for i, chg in enumerate(changeset.get_changes()):
+            if show_files > 0 and view_files > show_files:
+                files.append(u'- …')
+                break
+
+            path = chg[0]
+            res = repos_resource.child('source', path, repos_resource.id)
+            if not 'FILE_VIEW' in context.perm(res):
+                continue
+
+            chg_link = None
+            if chg[2] == 'edit':
+                chg_link = _changeset_link % (rev, i)
+            files.append(get_source_link(*chg, changeset_link=chg_link))
+            view_files += 1
+
+        header = ngettext('File:', 'Files:', num=(i + 1))
+        return u'\n\n%s\n%s' % (header, u'\n'.join(files))
